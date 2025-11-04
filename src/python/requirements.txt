@@ -15,5 +15,11 @@ uvicorn[standard]>=0.35.0,<0.36.0
 azure-ai-inference
 jinja2
 aiofiles
+# Tracing dependencies (included with agent-framework)
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+opentelemetry-exporter-otlp-proto-grpc>=1.20.0
 # Documentation
 mkdocs-material
+
+agent_framework

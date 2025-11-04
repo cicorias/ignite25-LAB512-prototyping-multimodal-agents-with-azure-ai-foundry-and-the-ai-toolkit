@@ -15,7 +15,39 @@ from customer_sales_postgres import PostgreSQLCustomerSales
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
 
+### Set up for OpenTelemetry tracing ###
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.resources import Resource
+### Set up for OpenTelemetry tracing ###
+
 RLS_USER_ID = None
+
+### Set up for OpenTelemetry tracing ###
+# Initialize tracer
+tracer = trace.get_tracer(__name__)
+
+def setup_tracing():
+    """Set up OpenTelemetry tracing for the MCP server."""
+    resource = Resource.create({
+        "service.name": "mcp-zava-sales",
+        "service.version": "1.0.0"
+    })
+    
+    provider = TracerProvider(resource=resource)
+    
+    # Configure OTLP exporter for AI Toolkit
+    otlp_exporter = OTLPSpanExporter(
+        endpoint="http://localhost:18889",
+        insecure=True
+    )
+    
+    provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
+    trace.set_tracer_provider(provider)
+    print("✓ OpenTelemetry tracing configured for AI Toolkit")
+### Set up for OpenTelemetry tracing ###
 
 
 @dataclass
@@ -43,8 +75,11 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
             print(f"⚠️  Error closing database pool: {e}")
 
 
-# Create MCP server with lifespan support
+# Create MCP server with lifespan support - bind to all interfaces for Docker host access
 mcp = FastMCP("mcp-zava-sales", lifespan=app_lifespan, stateless_http=True)
+# Configure server to bind to all interfaces
+mcp.settings.host = "0.0.0.0"
+mcp.settings.port = 8000
 
 
 def get_header(ctx: Context, header_name: str) -> Optional[str]:
@@ -101,20 +136,26 @@ async def get_products_by_name(
     Returns:
         Query results as a string.
     """
+    with tracer.start_as_current_span("get_products_by_name") as span:
+        rls_user_id = get_rls_user_id(ctx)
+        
+        span.set_attribute("product.name", product_name)
+        span.set_attribute("query.max_rows", max_rows)
+        span.set_attribute("rls.user_id", rls_user_id)
 
-    rls_user_id = get_rls_user_id(ctx)
+        print(f"Manager ID: {rls_user_id}")
+        print(f"Max Rows: {max_rows}")
 
-    print(f"Manager ID: {rls_user_id}")
-    print(f"Max Rows: {max_rows}")
+        try:
+            provider = get_db_provider()
+            result = await provider.get_products_by_name(product_name, max_rows, rls_user_id=rls_user_id)
+            span.set_attribute("query.result_count", len(result.split('\n')) if result else 0)
+            return f"Query Results:\n{result}"
 
-    try:
-
-        provider = get_db_provider()
-        result = await provider.get_products_by_name(product_name, max_rows, rls_user_id=rls_user_id)
-        return f"Query Results:\n{result}"
-
-    except Exception as e:
-        return f"Error executing database query: {e!s}"
+        except Exception as e:
+            span.record_exception(e)
+            span.set_attribute("error", True)
+            return f"Error executing database query: {e!s}"
 
 
 @mcp.tool()
@@ -124,12 +165,13 @@ async def get_current_utc_date() -> str:
     Returns:
         Current UTC date and time in ISO format (YYYY-MM-DDTHH:MM:SS.fffffZ)
     """
-    print("Retrieving current UTC date and time")
-    try:
-        current_utc = datetime.now(timezone.utc)
-        return f"Current UTC Date/Time: {current_utc.isoformat()}"
-    except Exception as e:
-        return f"Error retrieving current UTC date: {e!s}"
+    with tracer.start_as_current_span("get_current_utc_date"):
+        print("Retrieving current UTC date and time")
+        try:
+            current_utc = datetime.now(timezone.utc)
+            return f"Current UTC Date/Time: {current_utc.isoformat()}"
+        except Exception as e:
+            return f"Error retrieving current UTC date: {e!s}"
 
 
 async def run_http_server() -> None:
@@ -144,6 +186,10 @@ async def run_http_server() -> None:
 def main() -> None:
     """Main entry point for the MCP server."""
     global RLS_USER_ID
+    
+    ### Set up for OpenTelemetry tracing ###
+    setup_tracing()
+    ### Set up for OpenTelemetry tracing ###
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--stdio", action="store_true",

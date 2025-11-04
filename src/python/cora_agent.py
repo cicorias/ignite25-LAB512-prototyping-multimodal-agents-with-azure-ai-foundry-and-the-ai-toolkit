@@ -14,15 +14,13 @@ from azure.identity.aio import DefaultAzureCredential
 from azure.ai.projects.aio import AIProjectClient
 # from azure.identity import DefaultAzureCredential
 
-# from azure.monitor.opentelemetry import configure_azure_monitor
-# from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
-
+### Set up for OpenTelemetry tracing ###
 from agent_framework.observability import setup_observability
+### Set up for OpenTelemetry tracing ###
 
 
-from opentelemetry import trace
-
-tracer = trace.get_tracer(__name__)
+os.environ["AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED"] = "true"
+os.environ["AZURE_SDK_TRACING_IMPLEMENTATION"] = "opentelemetry"
 
 # Azure AI Foundry Agent Configuration
 ENDPOINT = "https://lab512-scicoria.services.ai.azure.com/api/projects/lab512"
@@ -63,6 +61,13 @@ def create_mcp_tools() -> list[ToolProtocol]:
     ]
 
 async def main() -> None:
+    ### Set up for OpenTelemetry tracing ###
+    setup_observability(
+        otlp_endpoint="http://aspire-dashboard:18889",  # AI Toolkit gRPC endpoint
+        enable_sensitive_data=True  # Enable capturing prompts and completions
+    )
+    ### Set up for OpenTelemetry tracing ###
+    
     async with (
         DefaultAzureCredential() as credential,
         ChatAgent(
@@ -75,22 +80,14 @@ async def main() -> None:
             ),
             instructions=AGENT_INSTRUCTIONS,
             tools=create_mcp_tools(),
-        ) as agent,
-        AIProjectClient(
-            credential=credential,
-            endpoint=ENDPOINT,
-        ) as project_client
+        ) as agent
+        # AIProjectClient(
+        #     credential=credential,
+        #     endpoint=ENDPOINT,
+        # ) as project_client
         
     ):
-        
-        conn_string = await project_client.telemetry.get_application_insights_connection_string()
-        setup_observability(applicationinsights_connection_string=conn_string)
         # Create a new thread that will be reused
-        # connection_string = await project_client.telemetry.get_application_insights_connection_string()
-
-        # configure_azure_monitor(connection_string=connection_string)
-        # OpenAIInstrumentor().instrument()
-
         thread = agent.get_new_thread()
 
         # Process user messages
@@ -101,7 +98,6 @@ async def main() -> None:
     # Give additional time for all async cleanup to complete
     await asyncio.sleep(1.0)
 
-@tracer.start_as_current_span("run_prompts")
 async def run_prompts(agent, thread):
     for user_input in USER_INPUTS:
         print(f"\n# User: '{user_input}'")

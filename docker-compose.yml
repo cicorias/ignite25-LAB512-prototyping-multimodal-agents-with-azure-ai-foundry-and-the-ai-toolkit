@@ -9,7 +9,7 @@ services:
     image: pgvector/pgvector:pg17
     container_name: ms-ignite-26-LAB512
     ports:
-      - "15432:5432"
+      - "5432:5432"
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
@@ -27,6 +27,14 @@ services:
       timeout: 15s
       retries: 20
       start_period: 180s
+  aspire:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    container_name: aspire-dashboard
+    ports:
+      - "18888:18888"
+      - "4317:18889"
+    environment:
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: true
 
 volumes:
   zava_postgresql_data_tour:
