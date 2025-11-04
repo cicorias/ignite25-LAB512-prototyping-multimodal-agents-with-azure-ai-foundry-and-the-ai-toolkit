@@ -27,5 +27,13 @@
                 "GitHub.copilot"
             ]
         }
+    },
+    "mounts": [
+        // Mount host .azure directory into /workspaces/.azure in the container
+        "source=${localWorkspaceFolder}/.azure,target=/workspace/.azure,type=bind"
+    ],
+    "containerEnv": {
+        // Set AZURE_CONFIG_DIR inside container to point to the mounted location
+        "AZURE_CONFIG_DIR": "/workspace/.azure"
     }
 }

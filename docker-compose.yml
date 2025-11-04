@@ -1,4 +1,4 @@
-name: ms-ignite-26
+x-name: ms-ignite-26
 
 networks:
   zava-network:
