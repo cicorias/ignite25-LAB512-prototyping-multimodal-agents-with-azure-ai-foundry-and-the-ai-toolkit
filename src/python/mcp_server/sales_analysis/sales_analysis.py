@@ -15,7 +15,42 @@ from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
 from sales_analysis_postgres import PostgreSQLSchemaProvider
 
+# OpenTelemetry imports
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
 RLS_USER_ID = None
+
+
+def setup_tracing(service_name: str = "mcp-zava-sales-analysis") -> None:
+    """Setup OpenTelemetry tracing with OTLP exporter."""
+    # Create a resource with service name
+    resource = Resource.create({"service.name": service_name})
+
+    # Setup trace provider
+    trace_provider = TracerProvider(resource=resource)
+
+    # Configure OTLP exporter (localhost by default)
+    otlp_exporter = OTLPSpanExporter(endpoint="http://localhost:4317", insecure=True)
+
+    # Add span processor
+    trace_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
+
+    # Set the global trace provider
+    trace.set_tracer_provider(trace_provider)
+
+    # Instrument FastAPI
+    FastAPIInstrumentor().instrument()
+
+    # Instrument asyncpg
+    AsyncPGInstrumentor().instrument()
+
+    print(f"✅ Tracing initialized for {service_name} (OTLP endpoint: http://localhost:4317)")
 
 
 @dataclass
@@ -197,7 +232,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--stdio", action="store_true", help="Run server in stdio mode")
     parser.add_argument("--RLS_USER_ID", type=str, default=None, help="Row Level Security User ID")
+    parser.add_argument("--enable-tracing", action="store_true",
+                        help="Enable OpenTelemetry tracing")
     args = parser.parse_args()
+
+    # Setup tracing if enabled
+    if args.enable_tracing:
+        setup_tracing("mcp-zava-sales-analysis")
 
     # if running in stdio mode, set the global RLS_USER_ID
     RLS_USER_ID = args.RLS_USER_ID

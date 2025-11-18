@@ -14,5 +14,11 @@ uvicorn[standard]>=0.35.0,<0.36.0
 azure-ai-inference
 jinja2
 aiofiles
+# Tracing
+opentelemetry-api>=1.28.0,<2.0.0
+opentelemetry-sdk>=1.28.0,<2.0.0
+opentelemetry-exporter-otlp>=1.28.0,<2.0.0
+opentelemetry-instrumentation-fastapi>=0.49b0,<1.0.0
+opentelemetry-instrumentation-asyncpg>=0.49b0,<1.0.0
 # Documentation
 mkdocs-material
