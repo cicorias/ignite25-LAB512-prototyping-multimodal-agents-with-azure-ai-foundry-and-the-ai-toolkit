@@ -1,0 +1,7 @@
+services:
+  db:
+    healthcheck:
+      interval: 100s
+      timeout: 30s
+      retries: 30
+      start_period: 240s
