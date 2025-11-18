@@ -3,8 +3,9 @@
 {
     "name": "Python 3.13 with PostgreSQL",
     "dockerComposeFile": [
-        "../docker-compose.yml",
-        "docker-compose.devcontainer.yml"
+        "../compose.yml",
+        "compose.devcontainer.yml",
+        "compose.override.yml"
     ],
     "service": "devcontainer",
     "workspaceFolder": "/workspace",
